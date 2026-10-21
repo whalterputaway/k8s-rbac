@@ -16,6 +16,7 @@ auth:
 
 rbac:
   create: true
+  allowPrivilegeEscalation: true
 
 serviceAccount:
   create: true
@@ -30,6 +31,7 @@ service:
 
 ingress:
   enabled: false
+  controllerNamespace: ingress-nginx
   className: ""
   annotations: {}
   hosts:
@@ -38,6 +40,10 @@ ingress:
         - path: /
           pathType: Prefix
   tls: []
+
+networkPolicy:
+  enabled: true
+  additionalIngress: []
 
 podAnnotations: {}
 

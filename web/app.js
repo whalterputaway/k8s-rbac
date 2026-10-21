@@ -16,6 +16,13 @@ let config = {};
 let adminToken = '';
 let generation = 0;
 let toastTimer;
+let view = 'resources';
+const accessGraph = new AccessGraphView(api, object => {
+  const resourceType = Object.keys(types).find(key => types[key].kind === object.kind);
+  if (!resourceType) return;
+  type = resourceType;
+  openEditor(object);
+});
 
 function notify(message) {
   $('notification').textContent = message;
@@ -52,10 +59,12 @@ async function connect() {
   namespaces = (data.items || []).map(item => item.metadata.name).sort();
   fillNamespaces($('namespace'), true);
   fillNamespaces($('resourceNS'), false);
+  fillNamespaces($('graphNamespace'), true);
   await load();
 }
 
 async function load() {
+  if (view === 'graph') return accessGraph.load();
   const current = ++generation;
   const currentType = type;
   const query = new URLSearchParams();
@@ -113,6 +122,10 @@ function render() {
 }
 
 function selectType(next) {
+  view = 'resources';
+  $('resourceView').hidden = false;
+  $('graphView').hidden = true;
+  $('showGraph').classList.remove('active');
   type = next;
   const spec = types[type];
   $('title').textContent = spec.title;
@@ -258,6 +271,15 @@ $('navigation').addEventListener('click', event => {
   const button = event.target.closest('[data-type]');
   if (button) selectType(button.dataset.type);
 });
+$('showGraph').addEventListener('click', () => {
+  view = 'graph';
+  generation++;
+  $('refresh').disabled = false;
+  $('resourceView').hidden = true;
+  $('graphView').hidden = false;
+  document.querySelectorAll('nav button').forEach(button => button.classList.toggle('active', button.id === 'showGraph'));
+  accessGraph.load();
+});
 $('search').addEventListener('input', render);
 $('namespace').addEventListener('change', load);
 $('refresh').addEventListener('click', load);
@@ -285,7 +307,7 @@ $('loginForm').addEventListener('submit', async event => {
     $('loginError').textContent = '';
   } catch (error) { $('loginError').textContent = error.message; }
 });
-$('logout').addEventListener('click', () => { adminToken = ''; items = []; render(); $('login').showModal(); });
+$('logout').addEventListener('click', () => { adminToken = ''; generation++; items = []; render(); accessGraph.reset(); $('login').showModal(); });
 
 (async () => {
   try {

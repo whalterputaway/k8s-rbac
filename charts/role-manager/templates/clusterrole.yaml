@@ -8,7 +8,16 @@ metadata:
 rules:
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["roles", "clusterroles"]
-    verbs: ["get", "list", "create", "update", "delete", "bind", "escalate"]
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - delete
+      {{- if .Values.rbac.allowPrivilegeEscalation }}
+      - bind
+      - escalate
+      {{- end }}
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["rolebindings", "clusterrolebindings"]
     verbs: ["get", "list", "create", "update", "delete"]

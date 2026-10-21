@@ -19,14 +19,20 @@ import (
 
 func main() {
 	demo := flag.Bool("demo", false, "Use an in-memory demo cluster")
-	addr := flag.String("listen", ":8080", "HTTP address")
+	addr := flag.String("listen", "", "HTTP address; default :8080, or 127.0.0.1:8080 in demo mode")
 	assets := flag.String("web", "web", "Static files directory")
 	kubeconfig := flag.String("kubeconfig", "", "Kubeconfig path for local development")
 	flag.Parse()
 	token := os.Getenv("ADMIN_TOKEN")
-	if !*demo && len(token) < 32 {
-		slog.Error("ADMIN_TOKEN must contain at least 32 characters")
+	if !*demo && server.ValidateAdminToken(token) != nil {
+		slog.Error("ADMIN_TOKEN must contain 32 to 4096 printable ASCII characters without whitespace")
 		os.Exit(1)
+	}
+	if *addr == "" {
+		*addr = ":8080"
+		if *demo {
+			*addr = "127.0.0.1:8080"
+		}
 	}
 	var backend server.Backend
 	if *demo {

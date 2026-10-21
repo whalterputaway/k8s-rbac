@@ -29,6 +29,7 @@ var resources = map[string]resource{
 }
 
 type Backend interface {
+	Ready(context.Context) error
 	List(context.Context, resource, string) (*unstructured.UnstructuredList, error)
 	Write(context.Context, resource, string, *unstructured.Unstructured, bool, bool) (*unstructured.Unstructured, error)
 	Delete(context.Context, resource, string, string, string) error
@@ -37,6 +38,11 @@ type Backend interface {
 type kubernetes struct{ client dynamic.Interface }
 
 func NewKubernetes(client dynamic.Interface) Backend { return &kubernetes{client} }
+
+func (k *kubernetes) Ready(ctx context.Context) error {
+	_, err := k.client.Resource(resources["namespaces"].GVR).List(ctx, metav1.ListOptions{Limit: 1})
+	return err
+}
 
 func (k *kubernetes) target(r resource, ns string) dynamic.ResourceInterface {
 	if r.Namespaced {
@@ -84,6 +90,8 @@ type demo struct {
 	objects map[string]*unstructured.Unstructured
 	version int
 }
+
+func (d *demo) Ready(context.Context) error { return nil }
 
 func NewDemo() Backend {
 	d := &demo{objects: map[string]*unstructured.Unstructured{}, version: 1}

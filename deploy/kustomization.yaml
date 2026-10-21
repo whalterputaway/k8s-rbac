@@ -6,6 +6,7 @@ resources:
   - rbac.yaml
   - deployment.yaml
   - service.yaml
+  - networkpolicy.yaml
 secretGenerator:
   - name: role-manager-auth
     envs:

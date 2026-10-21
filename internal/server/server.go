@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
@@ -12,22 +13,16 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/time/rate"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/validation"
-	"sigs.k8s.io/yaml"
 )
 
 func New(backend Backend, token string, demoMode bool, assets string) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { respond(w, 200, map[string]string{"status": "ok"}) })
-	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
-		if _, err := backend.List(r.Context(), resources["namespaces"], ""); err != nil {
-			respond(w, 503, map[string]string{"error": "Kubernetes unavailable"})
-			return
-		}
-		respond(w, 200, map[string]string{"status": "ready"})
-	})
+	mux.HandleFunc("GET /readyz", readiness(backend))
 	mux.HandleFunc("GET /api/config", func(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, map[string]bool{"demo": demoMode, "authentication": token != ""})
 	})
@@ -59,7 +54,7 @@ func New(backend Backend, token string, demoMode bool, assets string) http.Handl
 			respond(w, 413, map[string]string{"error": "Request body exceeds 1 MiB"})
 			return
 		}
-		data, err := yaml.YAMLToJSONStrict(body)
+		data, err := manifestJSON(body)
 		if err != nil {
 			respond(w, 400, map[string]string{"error": err.Error()})
 			return
@@ -114,28 +109,48 @@ func New(backend Backend, token string, demoMode bool, assets string) http.Handl
 		slog.Info("RBAC delete", "kind", res.Kind, "namespace", ns, "name", r.PathValue("name"))
 		w.WriteHeader(http.StatusNoContent)
 	})
+	authFailures := rate.NewLimiter(5, 10)
+	requests := rate.NewLimiter(20, 40)
 	mux.Handle("/api/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if token == "" && !demoMode {
+		if !sameOrigin(r) {
+			respond(w, 403, map[string]string{"error": "Cross-origin API requests are not allowed"})
+			return
+		}
+		if !demoMode && ValidateAdminToken(token) != nil {
 			respond(w, 503, map[string]string{"error": "Authentication is not configured"})
 			return
 		}
 		if token != "" {
 			want := sha256.Sum256([]byte(token))
 			got := sha256.Sum256([]byte(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")))
-			if !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") || subtle.ConstantTimeCompare(want[:], got[:]) != 1 {
+			if len(r.Header.Values("Authorization")) != 1 || !strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ") || subtle.ConstantTimeCompare(want[:], got[:]) != 1 {
+				if !authFailures.Allow() {
+					w.Header().Set("Retry-After", "1")
+					respond(w, 429, map[string]string{"error": "Too many authentication failures"})
+					return
+				}
 				respond(w, 401, map[string]string{"error": "Invalid administrator token"})
 				return
 			}
 		}
+		if !requests.Allow() {
+			w.Header().Set("Retry-After", "1")
+			respond(w, 429, map[string]string{"error": "Too many API requests"})
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+		defer cancel()
+		r = r.WithContext(ctx)
 		api.ServeHTTP(w, r)
 	}))
-	mux.Handle("/", http.FileServer(http.Dir(assets)))
+	mux.Handle("/", staticFiles(assets))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 		start := time.Now()
 		mux.ServeHTTP(w, r)
 		slog.Debug("HTTP request", "method", r.Method, "path", r.URL.Path, "elapsed", time.Since(start))
@@ -143,6 +158,10 @@ func New(backend Backend, token string, demoMode bool, assets string) http.Handl
 }
 
 func scope(w http.ResponseWriter, r *http.Request) (resource, string, bool) {
+	if err := validateQuery(r); err != nil {
+		respond(w, 400, map[string]string{"error": err.Error()})
+		return resource{}, "", false
+	}
 	res, ok := resources[r.PathValue("type")]
 	if !ok {
 		respond(w, 404, map[string]string{"error": "Unknown resource type"})
@@ -255,11 +274,14 @@ func validate(obj *unstructured.Unstructured, res resource, ns, name string, upd
 
 func fail(w http.ResponseWriter, err error) {
 	code := 502
+	message := "Kubernetes request failed"
 	var status apierrors.APIStatus
 	if errors.As(err, &status) && status.Status().Code >= 400 {
 		code = int(status.Status().Code)
+		message = err.Error()
 	}
-	respond(w, code, map[string]string{"error": err.Error()})
+	slog.Warn("Kubernetes request failed", "status", code, "error", err)
+	respond(w, code, map[string]string{"error": message})
 }
 
 func respond(w http.ResponseWriter, status int, value interface{}) {

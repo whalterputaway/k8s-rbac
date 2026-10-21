@@ -6,6 +6,8 @@
 <title>Role Manager</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="/style.css">
+<script src="/graph-model.js" defer></script>
+<script src="/graph.js" defer></script>
 <script src="/app.js" defer></script>
 </head>
 <body>
@@ -18,17 +20,35 @@
 <button data-type="rolebindings">RoleBindings</button>
 <button data-type="clusterrolebindings">ClusterRoleBindings</button>
 <button data-type="serviceaccounts">ServiceAccounts</button>
+<button id="showGraph">Связи доступа</button>
 </nav>
 <div class="sidebar-note">Kubernetes / RBAC</div>
 </aside>
 <main>
 <header><span>Управление доступом</span><button id="logout" class="text-button" hidden>Выйти</button></header>
-<section class="content">
+<section class="content" id="resourceView">
 <div class="heading"><div><h1 id="title">Roles</h1><p id="description">Права доступа к ресурсам внутри namespace.</p></div><button id="create" class="primary">+ Создать ресурс</button></div>
 <div class="panel"><div class="toolbar"><label class="search"><input id="search" placeholder="Поиск по имени" aria-label="Поиск по имени"></label><label class="namespace-filter">Namespace <select id="namespace"><option value="">Все namespace</option></select></label><button id="refresh" aria-label="Обновить список">Обновить</button></div>
 <div class="table-wrap"><table><thead><tr><th>Имя</th><th>Namespace</th><th>Правила / назначение</th><th>Действия</th></tr></thead><tbody id="rows"></tbody></table></div>
 <div id="empty" class="empty" hidden><p>Ресурсы не найдены.</p></div>
 <footer><span id="count">Загрузка…</span><span id="updated">Данные из Kubernetes API</span></footer></div>
+</section>
+<section class="content" id="graphView" hidden>
+<div class="heading"><div><h1>Связи доступа</h1><p>Пользователи и группы, их назначения и роли.</p></div><button id="graphRefresh">Обновить</button></div>
+<div class="graph-toolbar">
+<label class="search"><input id="graphSearch" placeholder="Пользователь, группа, роль…" aria-label="Поиск связей"></label>
+<label class="namespace-filter">Namespace<select id="graphNamespace"><option value="">Все namespace</option></select></label>
+<label class="graph-check"><input id="graphAccounts" type="checkbox"> Сервисные аккаунты</label>
+</div>
+<div class="graph-layout">
+<div class="graph-canvas" id="graphCanvas" tabindex="0" aria-label="Схема связей RBAC. Стрелки — перемещение, плюс и минус — масштаб, ноль — показать всё.">
+<div class="graph-world" id="graphWorld"><svg id="graphEdges" aria-hidden="true"></svg><div id="graphNodes"></div></div>
+<div id="graphEmpty" class="graph-empty" hidden><p id="graphEmptyText">Назначений пользователей и групп не найдено.</p></div>
+<div class="graph-controls"><button id="graphZoomOut" aria-label="Уменьшить масштаб">−</button><span id="graphZoom">100%</span><button id="graphZoomIn" aria-label="Увеличить масштаб">+</button><button id="graphFit">Показать всё</button></div>
+</div>
+<section class="graph-details" id="graphDetails" aria-label="Выбранный ресурс" hidden><h2>Выберите узел</h2><p>Нажмите на пользователя, назначение или роль, чтобы увидеть детали.</p></section>
+</div>
+<div class="graph-status"><span id="graphCount">Загрузка…</span><span>Перетаскивание — перемещение · Колесо — масштаб</span><span id="graphUpdated"></span></div>
 </section>
 </main>
 <div id="notification" role="alert" hidden></div>
