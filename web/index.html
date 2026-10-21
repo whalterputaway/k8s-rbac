@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Role Manager</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/style.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+<aside>
+<a class="brand" href="/">Role Manager</a>
+<div class="nav-label">Ресурсы</div>
+<nav id="navigation" aria-label="Ресурсы">
+<button data-type="roles" class="active">Roles</button>
+<button data-type="clusterroles">ClusterRoles</button>
+<button data-type="rolebindings">RoleBindings</button>
+<button data-type="clusterrolebindings">ClusterRoleBindings</button>
+<button data-type="serviceaccounts">ServiceAccounts</button>
+</nav>
+<div class="sidebar-note">Kubernetes / RBAC</div>
+</aside>
+<main>
+<header><span>Управление доступом</span><button id="logout" class="text-button" hidden>Выйти</button></header>
+<section class="content">
+<div class="heading"><div><h1 id="title">Roles</h1><p id="description">Права доступа к ресурсам внутри namespace.</p></div><button id="create" class="primary">+ Создать ресурс</button></div>
+<div class="panel"><div class="toolbar"><label class="search"><input id="search" placeholder="Поиск по имени" aria-label="Поиск по имени"></label><label class="namespace-filter">Namespace <select id="namespace"><option value="">Все namespace</option></select></label><button id="refresh" aria-label="Обновить список">Обновить</button></div>
+<div class="table-wrap"><table><thead><tr><th>Имя</th><th>Namespace</th><th>Правила / назначение</th><th>Действия</th></tr></thead><tbody id="rows"></tbody></table></div>
+<div id="empty" class="empty" hidden><p>Ресурсы не найдены.</p></div>
+<footer><span id="count">Загрузка…</span><span id="updated">Данные из Kubernetes API</span></footer></div>
+</section>
+</main>
+<div id="notification" role="alert" hidden></div>
+<dialog id="login"><form id="loginForm"><h2>Доступ к кластеру</h2><p>Введите ADMIN_TOKEN, заданный при запуске сервиса.</p><label>Токен администратора<input id="token" type="password" required autocomplete="current-password"></label><p id="loginError" class="error"></p><button class="primary" type="submit">Войти</button></form></dialog>
+<dialog id="editor"><form id="resourceForm"><div class="dialog-heading"><div><div class="eyebrow" id="editorKind">ROLE</div><h2 id="editorTitle">Новый ресурс</h2></div><button type="button" id="closeEditor" aria-label="Закрыть">✕</button></div>
+<div class="form-grid"><label>Имя<input id="resourceName" placeholder="pod-reader" required></label><label id="resourceNSLabel">Namespace<select id="resourceNS"></select></label></div>
+<div id="builder"><div id="rulesSection"><div class="section-heading"><h3>Правила доступа</h3><button id="addRule" type="button">+ Правило</button></div><div id="rules"></div></div>
+<div id="bindingSection" hidden><h3>Назначение роли</h3><div class="form-grid"><label>Тип роли<select id="roleKind"><option>Role</option><option>ClusterRole</option></select></label><label>Имя роли<input id="roleName" placeholder="pod-reader"></label></div><div class="section-heading"><h3>Субъекты</h3><button id="addSubject" type="button">+ Субъект</button></div><div id="subjects"></div></div>
+<div id="saSection" hidden><p>Создаёт сервисный аккаунт без автоматического монтирования токена. Назначьте права через RoleBinding или ClusterRoleBinding.</p></div></div>
+<label class="toggle"><input id="advanced" type="checkbox"> Редактор манифеста JSON / YAML</label>
+<div id="manifestSection" hidden><label>Манифест<textarea id="manifest" spellcheck="false" rows="18"></textarea></label><p class="muted">При сохранении используется этот манифест. roleRef существующего binding изменить нельзя.</p></div>
+<p id="editorError" class="error" role="alert"></p><p id="dryResult" class="success" role="status"></p>
+<div class="dialog-footer"><span id="dryHint">Проверьте перед применением</span><div><button id="dryRun" type="button">Проверить dry-run</button><button id="save" class="primary" type="submit">Создать ресурс</button></div></div>
+</form></dialog>
+</body>
+</html>

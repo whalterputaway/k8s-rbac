@@ -1,0 +1,5 @@
+/role-manager
+/role-manager.exe
+.env
+*.test
+deploy/admin.env
